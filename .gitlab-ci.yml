@@ -1,0 +1,67 @@
+stages:
+    - root-ca
+    - new-certs
+    - revoke-certs
+
+create_ca_cert_and_key:
+    stage: root-ca
+    tags:
+        - test-runner
+    image: alpine:latest
+    script:
+        - openssl genrsa -aes256 -passout pass:${CA_PASS} -out root-ca.key.pem 4096
+        - openssl req -new -x509 -days 7300 -key root-ca.key.pem -passin pass:${CA_PASS} -out root-ca.crt.pem -subj "/C=RU/O=[Local Network Name]/CN=Root CA"
+        - echo "Сохранить в переменную CA_KEY проекта n\ && "cat root-ca.key.pem
+        - echo "Сохранить в переменную CA_CERT группы n\ cat root-ca.crt.pem
+    when: manual
+
+deploy_ca_cert_on_hosts:
+    stage: root-ca
+    tags:
+        - test-runner
+    image: alpine:latest
+    script:
+        - chmod 600 $SSH_KEY
+        - while read line; do echo $line && scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $SSH_KEY $CA_CERT $SSH_USER@$line:/tmp/ca.pem && ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $SSH_KEY $SSH_USER@$line 'sudo cp /tmp/ca.pem /usr/local/share/ca-certificates/ca.crt && sudo update-ca-certificates' < /dev/null; done < $HOSTS
+    when: manual
+
+create_new_site_cert:
+    stage: new-certs
+    tags:
+        - test-runner
+    image: alpine:latest
+    script:
+        - openssl genrsa -out ${SUBJECT}.key 2048
+        - openssl req -new -key ${SUBJECT}.key -out ${SUBJECT}.csr -subj "/C=RU/O=[Local Network]/CN=${SUBJECT}" -addext "subjectAltName = DNS:${SUBJECT}, DNS:www.${SUBJECT}, DNS:*.${SUBJECT}" -addext "keyUsage = digitalSignature, keyEncipherment" -addext "extendedKeyUsage = serverAuth"
+        - openssl ca -config $openssl_cnf -cert $CA_CERT -keyfile $CA_KEY -in ${SUBJECT}.csr -out ${SUBJECT}.crt -passin pass:"${CA_PASS}" -batch -extensions server_cert
+        - git config user.name "GitLab CA Bot" && git config user.email "ca-bot@${CI_PROJECT_NAMESPACE}.local" && git add . && git commit -m "[skip ci] сертификат для ${SUBJECT}" && git push https://gitlab_ci_token:$push_token@${CI_SERVER_HOST}/${CI_PROJECT_PATH} HEAD:${CI_COMMIT_REF_NAME}
+        - echo -e 'Скопируйте к себе приватный ключ \n' && cat ${SUBJECT}.key
+        - echo -e 'Скопируйте к себе приватный ключ \n' && cat ${SUBJECT}.crt
+    when: manual
+
+
+create_new_user_cert:
+    stage: new-certs
+    tags:
+        - test-runner
+    image: alpine:latest
+    script:
+        - openssl genrsa -out ${SUBJECT}.key 2048
+        - openssl req -new -key ${SUBJECT}.key -out ${SUBJECT}.csr -subj "/C=RU/O=[Local Network]/CN=${SUBJECT}" -addext "keyUsage = digitalSignature, keyEncipherment" -addext "extendedKeyUsage = clientAuth"
+        - openssl ca -config $openssl_cnf -cert $CA_CERT -keyfile $CA_KEY -in ${SUBJECT}.csr -out ${SUBJECT}.crt -passin pass:"${CA_PASS}" -batch
+        - git config user.name "GitLab CA Bot" && git config user.email "ca-bot@${CI_PROJECT_NAMESPACE}.local" && git add . && git commit -m "[skip ci] сертификат для ${SUBJECT}" && git push https://gitlab_ci_token:$push_token@${CI_SERVER_HOST}/${CI_PROJECT_PATH} HEAD:${CI_COMMIT_REF_NAME}
+        - echo -e 'Скопируйте к себе приватный ключ \n' && cat ${SUBJECT}.key
+        - echo -e 'Скопируйте к себе приватный ключ \n' && cat ${SUBJECT}.crt
+
+    when: manual
+
+revoke_cert:
+    stage: revoke-certs
+    tags:
+        - test-runner
+    image: alpine:latest
+    script:
+        - openssl ca -config $openssl_cnf -revoke ${BAD} -keyfile $CA_KEY --passin pass:${CA_PASS} -cert $CA_CERT
+        - openssl ca -config $openssl_cnf -gencrl -keyfile $CA_KEY -cert $CA_CERT --passin pass:${CA_PASS} -out root-ca.crl
+        - echo -e 'распространить по хостам \n' && cat root-ca.crl
+    when: manua
