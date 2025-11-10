@@ -40,8 +40,47 @@ Stages:
 | CA_KEY | Приватный ключ корневого CA | Содержимое root-ca.key.pem |
 | CA_PASS | Пароль для шифрования CA ключа | my-secret-password |
 | push_token | GitLab token для push в репозиторий | glpat-xxxxxx |
-| openssl_conf | файл с настройками CA | содержимое openssl.conf |
+| openssl_cnf | файл с настройками CA | содержимое openssl.conf |
 
+пример openssl_cnf
+```
+[ ca ]
+default_ca = own_CA
+
+[ home_CA ]
+dir               = .
+crl_dir           = $dir/crl
+new_certs_dir     = $dir/newcerts
+database          = $dir/index.txt
+serial            = $dir/serial
+
+private_key       = $dir/private/root-ca.key.pem
+certificate       = $dir/certs/root-ca.crt.pem
+
+default_days      = 365
+default_crl_days  = 30
+default_md        = sha256
+
+policy            = policy_simple
+
+email_in_dn       = no
+name_opt          = ca_default
+cert_opt          = ca_default
+copy_extensions   = copy
+preserve          = no
+rand_serial       = no
+
+[ policy_simple ]
+commonName              = supplied  # переменная SUBJECT Должна быть указана
+
+[ req ]
+default_bits        = 2048
+
+[ server_cert ]
+basicConstraints  = CA:FALSE
+keyUsage          = digitalSignature, keyEncipherment
+extendedKeyUsage  = serverAuth
+```
 Runtime переменные (указываются при запуске джобы):
 | Переменная | Описание | Пример |
 | --------- | ---------- | -------- |
