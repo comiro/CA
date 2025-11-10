@@ -11,8 +11,8 @@ create_ca_cert_and_key:
     script:
         - openssl genrsa -aes256 -passout pass:${CA_PASS} -out root-ca.key.pem 4096
         - openssl req -new -x509 -days 7300 -key root-ca.key.pem -passin pass:${CA_PASS} -out root-ca.crt.pem -subj "/C=RU/O=[Local Network Name]/CN=Root CA"
-        - echo "Сохранить в переменную CA_KEY проекта n\ && "cat root-ca.key.pem
-        - echo "Сохранить в переменную CA_CERT группы n\ cat root-ca.crt.pem
+        - echo "Сохранить в переменную CA_KEY проекта n\ && "cat root-ca.key.pem # Данные сертификаты и ключа вместо вывода на экран
+        - echo "Сохранить в переменную CA_CERT группы n\ cat root-ca.crt.pem     # можно POSTить в защищенное хранилище
     when: manual
 
 deploy_ca_cert_on_hosts:
@@ -64,4 +64,4 @@ revoke_cert:
         - openssl ca -config $openssl_cnf -revoke ${BAD} -keyfile $CA_KEY --passin pass:${CA_PASS} -cert $CA_CERT
         - openssl ca -config $openssl_cnf -gencrl -keyfile $CA_KEY -cert $CA_CERT --passin pass:${CA_PASS} -out root-ca.crl
         - echo -e 'распространить по хостам \n' && cat root-ca.crl
-    when: manua
+    when: manual
