@@ -1,0 +1,6 @@
+*.txt
+*.md
+.gitlab-ci.yml
+*.key
+*.csr
+*.crt
